@@ -1,7 +1,6 @@
 import Link from "next/link";
 
-import { CreateBountyForm } from "@/components/create-bounty-form";
-import { MyBounties } from "@/components/my-bounties";
+import { MarketplaceHub } from "@/components/marketplace-hub";
 import { PROGRAM_ID, SOLANA_RPC_URL } from "@/lib/solana";
 
 export default function Home() {
@@ -10,13 +9,13 @@ export default function Home() {
       <section className="mb-8 grid gap-4 md:grid-cols-[1.2fr_0.8fr] md:items-end">
         <div>
           <p className="mb-2 text-sm font-medium uppercase tracking-[0.2em] text-black/60">
-            Blink Bounties
+            Blink Raffle Market
           </p>
           <h1 className="text-4xl font-bold leading-tight md:text-5xl">
-            Post a bounty. Share one link. Pay out trustlessly.
+            List raffle items. Sell tickets. Settle instantly on Solana.
           </h1>
           <p className="mt-4 max-w-2xl text-base text-black/75">
-            Escrow lives on Solana. Submissions happen directly in a Blink card on X, GitHub, and wallets that support Actions.
+            Creators post products with ticket pricing, buyers enter raffles from shared links, and payouts happen on-chain.
           </p>
         </div>
         <div className="rounded-2xl border border-black/10 bg-white/70 p-4 text-xs shadow-lg backdrop-blur-sm">
@@ -26,8 +25,7 @@ export default function Home() {
         </div>
       </section>
 
-      <CreateBountyForm />
-      <MyBounties />
+      <MarketplaceHub />
 
       <section className="mt-8 rounded-2xl border border-black/10 bg-white/75 p-5 text-sm shadow-lg backdrop-blur-sm">
         <h2 className="text-base font-semibold">Demo Flow</h2>

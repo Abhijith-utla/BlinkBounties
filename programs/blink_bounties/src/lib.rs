@@ -3,211 +3,249 @@ use anchor_lang::system_program::{self, Transfer};
 
 declare_id!("3MAR3HqMntaDfPE1Vmf1XGBeCEv2dykXUCjwsMB8gF1S");
 
+const MAX_TITLE_LEN: usize = 80;
 const MAX_DESCRIPTION_LEN: usize = 280;
-const MAX_WORK_URL_LEN: usize = 300;
+const MAX_IMAGE_URL_LEN: usize = 300;
 
 #[program]
 pub mod blink_bounties {
     use super::*;
 
-    pub fn create_bounty(
-        ctx: Context<CreateBounty>,
-        bounty_id: u64,
-        amount: u64,
+    pub fn create_raffle(
+        ctx: Context<CreateRaffle>,
+        raffle_id: u64,
+        ticket_price: u64,
+        max_tickets: u32,
+        title: String,
         description: String,
+        image_url: String,
     ) -> Result<()> {
-        require!(amount > 0, BountyError::InvalidAmount);
+        require!(ticket_price > 0, RaffleError::InvalidAmount);
+        require!(max_tickets > 0, RaffleError::InvalidTicketQuantity);
+        require!(title.as_bytes().len() <= MAX_TITLE_LEN, RaffleError::TitleTooLong);
         require!(
             description.as_bytes().len() <= MAX_DESCRIPTION_LEN,
-            BountyError::DescriptionTooLong
+            RaffleError::DescriptionTooLong
+        );
+        require!(
+            image_url.as_bytes().len() <= MAX_IMAGE_URL_LEN,
+            RaffleError::ImageUrlTooLong
         );
 
-        let bounty = &mut ctx.accounts.bounty;
-        bounty.creator = ctx.accounts.creator.key();
-        bounty.bounty_id = bounty_id;
-        bounty.amount = amount;
-        bounty.description = description;
-        bounty.claimant = None;
-        bounty.work_url = None;
-        bounty.status = BountyStatus::Open;
-        bounty.bump = ctx.bumps.bounty;
+        let raffle = &mut ctx.accounts.raffle;
+        raffle.seller = ctx.accounts.seller.key();
+        raffle.raffle_id = raffle_id;
+        raffle.ticket_price = ticket_price;
+        raffle.max_tickets = max_tickets;
+        raffle.sold_tickets = 0;
+        raffle.title = title;
+        raffle.description = description;
+        raffle.image_url = image_url;
+        raffle.status = RaffleStatus::Open;
+        raffle.bump = ctx.bumps.raffle;
+
+        Ok(())
+    }
+
+    pub fn buy_tickets(ctx: Context<BuyTickets>, quantity: u8) -> Result<()> {
+        require!(quantity > 0, RaffleError::InvalidTicketQuantity);
+
+        let raffle = &mut ctx.accounts.raffle;
+        require!(raffle.status == RaffleStatus::Open, RaffleError::RaffleClosed);
+
+        let quantity_u32 = quantity as u32;
+        let new_sold_tickets = raffle
+            .sold_tickets
+            .checked_add(quantity_u32)
+            .ok_or(RaffleError::MathOverflow)?;
+        require!(new_sold_tickets <= raffle.max_tickets, RaffleError::SoldOut);
+
+        let total_cost = raffle
+            .ticket_price
+            .checked_mul(quantity as u64)
+            .ok_or(RaffleError::MathOverflow)?;
 
         let cpi_accounts = Transfer {
-            from: ctx.accounts.creator.to_account_info(),
-            to: bounty.to_account_info(),
+            from: ctx.accounts.buyer.to_account_info(),
+            to: raffle.to_account_info(),
         };
         let cpi_ctx = CpiContext::new(ctx.accounts.system_program.to_account_info(), cpi_accounts);
-        system_program::transfer(cpi_ctx, amount)?;
+        system_program::transfer(cpi_ctx, total_cost)?;
 
-        Ok(())
-    }
+        raffle.sold_tickets = new_sold_tickets;
 
-    pub fn submit_work(ctx: Context<SubmitWork>, work_url: String) -> Result<()> {
-        require!(
-            work_url.as_bytes().len() <= MAX_WORK_URL_LEN,
-            BountyError::WorkUrlTooLong
-        );
-
-        let bounty = &mut ctx.accounts.bounty;
-        require!(bounty.status == BountyStatus::Open, BountyError::InvalidStatus);
-
-        match bounty.claimant {
-            Some(current_claimant) => {
-                require_keys_eq!(current_claimant, ctx.accounts.claimant.key(), BountyError::Unauthorized);
-            }
-            None => {
-                bounty.claimant = Some(ctx.accounts.claimant.key());
-            }
+        let buyer_position = &mut ctx.accounts.buyer_position;
+        if buyer_position.buyer == Pubkey::default() {
+            buyer_position.raffle = raffle.key();
+            buyer_position.buyer = ctx.accounts.buyer.key();
+            buyer_position.tickets = 0;
+            buyer_position.spent = 0;
+            buyer_position.bump = ctx.bumps.buyer_position;
         }
 
-        bounty.work_url = Some(work_url);
-        bounty.status = BountyStatus::Submitted;
+        buyer_position.tickets = buyer_position
+            .tickets
+            .checked_add(quantity_u32)
+            .ok_or(RaffleError::MathOverflow)?;
+        buyer_position.spent = buyer_position
+            .spent
+            .checked_add(total_cost)
+            .ok_or(RaffleError::MathOverflow)?;
+
         Ok(())
     }
 
-    pub fn approve_bounty(ctx: Context<ApproveBounty>) -> Result<()> {
-        let bounty = &mut ctx.accounts.bounty;
+    pub fn close_raffle(ctx: Context<CloseRaffle>) -> Result<()> {
+        let raffle = &mut ctx.accounts.raffle;
+        require_keys_eq!(raffle.seller, ctx.accounts.seller.key(), RaffleError::Unauthorized);
+        require!(raffle.status == RaffleStatus::Open, RaffleError::RaffleClosed);
+        raffle.status = RaffleStatus::Closed;
+        Ok(())
+    }
 
-        require_keys_eq!(bounty.creator, ctx.accounts.creator.key(), BountyError::Unauthorized);
-        require!(bounty.status == BountyStatus::Submitted, BountyError::InvalidStatus);
+    pub fn claim_proceeds(ctx: Context<ClaimProceeds>) -> Result<()> {
+        let raffle = &mut ctx.accounts.raffle;
+        require_keys_eq!(raffle.seller, ctx.accounts.seller.key(), RaffleError::Unauthorized);
 
-        let claimant = bounty.claimant.ok_or(BountyError::MissingClaimant)?;
-        require_keys_eq!(claimant, ctx.accounts.claimant.key(), BountyError::Unauthorized);
+        let rent_floor = Rent::get()?.minimum_balance(Raffle::INIT_SPACE);
+        let raffle_info = raffle.to_account_info();
+        let seller_info = ctx.accounts.seller.to_account_info();
 
-        let payout = bounty.amount;
-        require!(payout > 0, BountyError::InvalidAmount);
+        let raffle_lamports = **raffle_info.lamports.borrow();
+        let available = raffle_lamports.saturating_sub(rent_floor);
+        require!(available > 0, RaffleError::NothingToClaim);
 
         {
-            let bounty_info = bounty.to_account_info();
-            let claimant_info = ctx.accounts.claimant.to_account_info();
-            let bounty_lamports = &mut **bounty_info.try_borrow_mut_lamports()?;
-            let claimant_lamports = &mut **claimant_info.try_borrow_mut_lamports()?;
-            *bounty_lamports = bounty_lamports
-                .checked_sub(payout)
-                .ok_or(BountyError::MathOverflow)?;
-            *claimant_lamports = claimant_lamports
-                .checked_add(payout)
-                .ok_or(BountyError::MathOverflow)?;
+            let raffle_lamports_mut = &mut **raffle_info.try_borrow_mut_lamports()?;
+            let seller_lamports_mut = &mut **seller_info.try_borrow_mut_lamports()?;
+            *raffle_lamports_mut = raffle_lamports_mut
+                .checked_sub(available)
+                .ok_or(RaffleError::MathOverflow)?;
+            *seller_lamports_mut = seller_lamports_mut
+                .checked_add(available)
+                .ok_or(RaffleError::MathOverflow)?;
         }
 
-        bounty.amount = 0;
-        bounty.status = BountyStatus::Completed;
-        Ok(())
-    }
-
-    pub fn cancel_bounty(ctx: Context<CancelBounty>) -> Result<()> {
-        let bounty = &mut ctx.accounts.bounty;
-
-        require_keys_eq!(bounty.creator, ctx.accounts.creator.key(), BountyError::Unauthorized);
-        require!(bounty.status == BountyStatus::Open, BountyError::InvalidStatus);
-
-        let refund = bounty.amount;
-        if refund > 0 {
-            let bounty_info = bounty.to_account_info();
-            let creator_info = ctx.accounts.creator.to_account_info();
-            let bounty_lamports = &mut **bounty_info.try_borrow_mut_lamports()?;
-            let creator_lamports = &mut **creator_info.try_borrow_mut_lamports()?;
-            *bounty_lamports = bounty_lamports
-                .checked_sub(refund)
-                .ok_or(BountyError::MathOverflow)?;
-            *creator_lamports = creator_lamports
-                .checked_add(refund)
-                .ok_or(BountyError::MathOverflow)?;
-        }
-
-        bounty.amount = 0;
-        bounty.status = BountyStatus::Cancelled;
         Ok(())
     }
 }
 
 #[derive(Accounts)]
-#[instruction(bounty_id: u64)]
-pub struct CreateBounty<'info> {
+#[instruction(raffle_id: u64)]
+pub struct CreateRaffle<'info> {
     #[account(mut)]
-    pub creator: Signer<'info>,
+    pub seller: Signer<'info>,
     #[account(
         init,
-        payer = creator,
-        space = Bounty::INIT_SPACE,
-        seeds = [b"bounty", creator.key().as_ref(), &bounty_id.to_le_bytes()],
+        payer = seller,
+        space = Raffle::INIT_SPACE,
+        seeds = [b"raffle", seller.key().as_ref(), &raffle_id.to_le_bytes()],
         bump
     )]
-    pub bounty: Account<'info, Bounty>,
+    pub raffle: Account<'info, Raffle>,
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
-pub struct SubmitWork<'info> {
-    pub claimant: Signer<'info>,
+pub struct BuyTickets<'info> {
     #[account(mut)]
-    pub bounty: Account<'info, Bounty>,
+    pub buyer: Signer<'info>,
+    #[account(mut)]
+    pub raffle: Account<'info, Raffle>,
+    #[account(
+        init_if_needed,
+        payer = buyer,
+        space = BuyerPosition::INIT_SPACE,
+        seeds = [b"position", raffle.key().as_ref(), buyer.key().as_ref()],
+        bump
+    )]
+    pub buyer_position: Account<'info, BuyerPosition>,
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
-pub struct ApproveBounty<'info> {
+pub struct CloseRaffle<'info> {
     #[account(mut)]
-    pub creator: Signer<'info>,
+    pub seller: Signer<'info>,
     #[account(mut)]
-    pub claimant: SystemAccount<'info>,
-    #[account(mut)]
-    pub bounty: Account<'info, Bounty>,
+    pub raffle: Account<'info, Raffle>,
 }
 
 #[derive(Accounts)]
-pub struct CancelBounty<'info> {
+pub struct ClaimProceeds<'info> {
     #[account(mut)]
-    pub creator: Signer<'info>,
+    pub seller: Signer<'info>,
     #[account(mut)]
-    pub bounty: Account<'info, Bounty>,
+    pub raffle: Account<'info, Raffle>,
 }
 
 #[account]
-pub struct Bounty {
-    pub creator: Pubkey,
-    pub bounty_id: u64,
-    pub amount: u64,
+pub struct Raffle {
+    pub seller: Pubkey,
+    pub raffle_id: u64,
+    pub ticket_price: u64,
+    pub max_tickets: u32,
+    pub sold_tickets: u32,
+    pub title: String,
     pub description: String,
-    pub claimant: Option<Pubkey>,
-    pub work_url: Option<String>,
-    pub status: BountyStatus,
+    pub image_url: String,
+    pub status: RaffleStatus,
     pub bump: u8,
 }
 
-impl Bounty {
+impl Raffle {
     pub const INIT_SPACE: usize = 8 + // discriminator
-        32 + // creator
-        8 + // bounty_id
-        8 + // amount
+        32 + // seller
+        8 + // raffle_id
+        8 + // ticket_price
+        4 + // max_tickets
+        4 + // sold_tickets
+        (4 + MAX_TITLE_LEN) + // title
         (4 + MAX_DESCRIPTION_LEN) + // description
-        (1 + 32) + // claimant option
-        (1 + 4 + MAX_WORK_URL_LEN) + // work_url option
-        1 + // status enum
+        (4 + MAX_IMAGE_URL_LEN) + // image_url
+        1 + // status
         1; // bump
 }
 
+#[account]
+pub struct BuyerPosition {
+    pub raffle: Pubkey,
+    pub buyer: Pubkey,
+    pub tickets: u32,
+    pub spent: u64,
+    pub bump: u8,
+}
+
+impl BuyerPosition {
+    pub const INIT_SPACE: usize = 8 + 32 + 32 + 4 + 8 + 1;
+}
+
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
-pub enum BountyStatus {
+pub enum RaffleStatus {
     Open,
-    Submitted,
-    Completed,
-    Cancelled,
+    Closed,
 }
 
 #[error_code]
-pub enum BountyError {
+pub enum RaffleError {
     #[msg("Only positive amounts are allowed")]
     InvalidAmount,
-    #[msg("Bounty description exceeds max length")]
+    #[msg("Invalid ticket quantity")]
+    InvalidTicketQuantity,
+    #[msg("Raffle title exceeds max length")]
+    TitleTooLong,
+    #[msg("Raffle description exceeds max length")]
     DescriptionTooLong,
-    #[msg("Work URL exceeds max length")]
-    WorkUrlTooLong,
-    #[msg("Invalid bounty status for this operation")]
-    InvalidStatus,
-    #[msg("Claimant is required before approval")]
-    MissingClaimant,
+    #[msg("Image URL exceeds max length")]
+    ImageUrlTooLong,
+    #[msg("Raffle is closed")]
+    RaffleClosed,
+    #[msg("No tickets left")]
+    SoldOut,
     #[msg("Unauthorized signer or account")]
     Unauthorized,
+    #[msg("Nothing to claim")]
+    NothingToClaim,
     #[msg("Math overflow")]
     MathOverflow,
 }

@@ -26,206 +26,273 @@ const env = envSchema.parse({
   NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
 });
 
-export const SOLANA_RPC_URL = env.NEXT_PUBLIC_SOLANA_RPC_URL ?? clusterApiUrl("testnet");
+export const SOLANA_RPC_URL = env.NEXT_PUBLIC_SOLANA_RPC_URL ?? clusterApiUrl("devnet");
 export const PROGRAM_ID = new PublicKey(env.NEXT_PUBLIC_PROGRAM_ID ?? DEFAULT_PROGRAM_ID);
 export const APP_URL = env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-export const BOUNTY_ACCOUNT_SPACE = 680;
 
 export const connection = new Connection(SOLANA_RPC_URL, "confirmed");
 
 const coder = new BorshCoder(BLINK_BOUNTIES_IDL as Idl);
 
-export type BountyStatus = "open" | "submitted" | "completed" | "cancelled";
+export type RaffleStatus = "open" | "closed";
 
-export interface BountyAccount {
-  address: string;
-  creator: string;
-  bountyId: string;
-  amountLamports: string;
-  amountSol: number;
+interface DecodedRaffle {
+  seller: PublicKey;
+  raffle_id: BN;
+  ticket_price: BN;
+  max_tickets: number;
+  sold_tickets: number;
+  title: string;
   description: string;
-  claimant: string | null;
-  workUrl: string | null;
-  status: BountyStatus;
-  bump: number;
-}
-
-interface DecodedBounty {
-  creator: PublicKey;
-  bounty_id: BN;
-  amount: BN;
-  description: string;
-  claimant: PublicKey | null;
-  work_url: string | null;
+  image_url: string;
   status: Record<string, unknown>;
   bump: number;
 }
 
-function normalizeStatus(status: Record<string, unknown>): BountyStatus {
-  const raw = Object.keys(status)[0];
-  const key = raw?.toLowerCase() as BountyStatus | undefined;
-  if (!key) return "open";
-  return key;
+interface DecodedBuyerPosition {
+  raffle: PublicKey;
+  buyer: PublicKey;
+  tickets: number;
+  spent: BN;
+  bump: number;
 }
 
-export function getBountyPda(creator: PublicKey, bountyId: bigint): PublicKey {
-  const bountyIdBuffer = new BN(bountyId.toString()).toArrayLike(Buffer, "le", 8);
-
-  const [pda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("bounty"), creator.toBuffer(), bountyIdBuffer],
-    PROGRAM_ID,
-  );
-
-  return pda;
+export interface RaffleAccount {
+  address: string;
+  seller: string;
+  raffleId: string;
+  ticketPriceLamports: string;
+  ticketPriceSol: number;
+  maxTickets: number;
+  soldTickets: number;
+  title: string;
+  description: string;
+  imageUrl: string;
+  status: RaffleStatus;
+  bump: number;
 }
 
-export async function fetchBountyByAddress(address: PublicKey): Promise<BountyAccount | null> {
-  const accountInfo = await connection.getAccountInfo(address);
-  if (!accountInfo) {
-    return null;
-  }
+export interface BuyerPositionAccount {
+  address: string;
+  raffle: string;
+  buyer: string;
+  tickets: number;
+  spentLamports: string;
+  spentSol: number;
+  bump: number;
+}
 
-  const decoded = coder.accounts.decode("Bounty", accountInfo.data) as DecodedBounty;
-  const amountLamports = decoded.amount.toString();
+function normalizeStatus(status: Record<string, unknown>): RaffleStatus {
+  const raw = Object.keys(status)[0]?.toLowerCase();
+  return raw === "closed" ? "closed" : "open";
+}
 
+function parseRaffle(address: PublicKey, data: Buffer): RaffleAccount {
+  const decoded = coder.accounts.decode("Raffle", data) as DecodedRaffle;
+  const ticketPriceLamports = decoded.ticket_price.toString();
   return {
     address: address.toBase58(),
-    creator: decoded.creator.toBase58(),
-    bountyId: decoded.bounty_id.toString(),
-    amountLamports,
-    amountSol: Number(amountLamports) / LAMPORTS_PER_SOL,
+    seller: decoded.seller.toBase58(),
+    raffleId: decoded.raffle_id.toString(),
+    ticketPriceLamports,
+    ticketPriceSol: Number(ticketPriceLamports) / LAMPORTS_PER_SOL,
+    maxTickets: decoded.max_tickets,
+    soldTickets: decoded.sold_tickets,
+    title: decoded.title,
     description: decoded.description,
-    claimant: decoded.claimant ? decoded.claimant.toBase58() : null,
-    workUrl: decoded.work_url,
+    imageUrl: decoded.image_url,
     status: normalizeStatus(decoded.status),
     bump: decoded.bump,
   };
 }
 
-export async function fetchBountiesByCreator(
-  rpcConnection: Connection,
-  creator: PublicKey,
-): Promise<BountyAccount[]> {
-  const creatorOffset = 8; // account discriminator
-  const accounts = await rpcConnection.getProgramAccounts(PROGRAM_ID, {
-    filters: [{ memcmp: { offset: creatorOffset, bytes: creator.toBase58() } }],
-  });
-
-  const parsed = accounts.map((account) => {
-    const decoded = coder.accounts.decode("Bounty", account.account.data) as DecodedBounty;
-    const amountLamports = decoded.amount.toString();
-    return {
-      address: account.pubkey.toBase58(),
-      creator: decoded.creator.toBase58(),
-      bountyId: decoded.bounty_id.toString(),
-      amountLamports,
-      amountSol: Number(amountLamports) / LAMPORTS_PER_SOL,
-      description: decoded.description,
-      claimant: decoded.claimant ? decoded.claimant.toBase58() : null,
-      workUrl: decoded.work_url,
-      status: normalizeStatus(decoded.status),
-      bump: decoded.bump,
-    } satisfies BountyAccount;
-  });
-
-  return parsed.sort((a, b) => Number(b.bountyId) - Number(a.bountyId));
+function parseBuyerPosition(address: PublicKey, data: Buffer): BuyerPositionAccount {
+  const decoded = coder.accounts.decode("BuyerPosition", data) as DecodedBuyerPosition;
+  const spentLamports = decoded.spent.toString();
+  return {
+    address: address.toBase58(),
+    raffle: decoded.raffle.toBase58(),
+    buyer: decoded.buyer.toBase58(),
+    tickets: decoded.tickets,
+    spentLamports,
+    spentSol: Number(spentLamports) / LAMPORTS_PER_SOL,
+    bump: decoded.bump,
+  };
 }
 
-export function buildCreateBountyInstruction(args: {
-  creator: PublicKey;
-  bounty: PublicKey;
-  bountyId: bigint;
-  amountLamports: bigint;
+export function getRafflePda(seller: PublicKey, raffleId: bigint): PublicKey {
+  const raffleIdBuffer = new BN(raffleId.toString()).toArrayLike(Buffer, "le", 8);
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("raffle"), seller.toBuffer(), raffleIdBuffer],
+    PROGRAM_ID,
+  );
+  return pda;
+}
+
+export function getBuyerPositionPda(raffle: PublicKey, buyer: PublicKey): PublicKey {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("position"), raffle.toBuffer(), buyer.toBuffer()],
+    PROGRAM_ID,
+  );
+  return pda;
+}
+
+export async function fetchRaffleByAddress(address: PublicKey): Promise<RaffleAccount | null> {
+  const info = await connection.getAccountInfo(address);
+  if (!info) return null;
+  return parseRaffle(address, info.data);
+}
+
+export async function fetchAllRaffles(rpcConnection: Connection): Promise<RaffleAccount[]> {
+  const accounts = await rpcConnection.getProgramAccounts(PROGRAM_ID, {
+    filters: [{ memcmp: { offset: 0, bytes: "R1L4cMRuGB9" } }],
+  });
+  const list = accounts.map((account) => parseRaffle(account.pubkey, account.account.data));
+  return list.sort((a, b) => Number(b.raffleId) - Number(a.raffleId));
+}
+
+export async function fetchRafflesBySeller(
+  rpcConnection: Connection,
+  seller: PublicKey,
+): Promise<RaffleAccount[]> {
+  const accounts = await rpcConnection.getProgramAccounts(PROGRAM_ID, {
+    filters: [
+      { memcmp: { offset: 0, bytes: "R1L4cMRuGB9" } },
+      { memcmp: { offset: 8, bytes: seller.toBase58() } },
+    ],
+  });
+  const list = accounts.map((account) => parseRaffle(account.pubkey, account.account.data));
+  return list.sort((a, b) => Number(b.raffleId) - Number(a.raffleId));
+}
+
+export async function fetchPositionsByBuyer(
+  rpcConnection: Connection,
+  buyer: PublicKey,
+): Promise<BuyerPositionAccount[]> {
+  const accounts = await rpcConnection.getProgramAccounts(PROGRAM_ID, {
+    filters: [
+      { memcmp: { offset: 0, bytes: "futkuHCnA98" } },
+      { memcmp: { offset: 8 + 32, bytes: buyer.toBase58() } },
+    ],
+  });
+  return accounts.map((account) => parseBuyerPosition(account.pubkey, account.account.data));
+}
+
+export async function fetchPositionsByRaffle(
+  rpcConnection: Connection,
+  raffle: PublicKey,
+): Promise<BuyerPositionAccount[]> {
+  const accounts = await rpcConnection.getProgramAccounts(PROGRAM_ID, {
+    filters: [
+      { memcmp: { offset: 0, bytes: "futkuHCnA98" } },
+      { memcmp: { offset: 8, bytes: raffle.toBase58() } },
+    ],
+  });
+  return accounts.map((account) => parseBuyerPosition(account.pubkey, account.account.data));
+}
+
+export function buildCreateRaffleInstruction(args: {
+  seller: PublicKey;
+  raffle: PublicKey;
+  raffleId: bigint;
+  ticketPriceLamports: bigint;
+  maxTickets: number;
+  title: string;
   description: string;
+  imageUrl: string;
 }): TransactionInstruction {
-  const data = coder.instruction.encode("create_bounty", {
-    bounty_id: new BN(args.bountyId.toString()),
-    amount: new BN(args.amountLamports.toString()),
+  const data = coder.instruction.encode("create_raffle", {
+    raffle_id: new BN(args.raffleId.toString()),
+    ticket_price: new BN(args.ticketPriceLamports.toString()),
+    max_tickets: args.maxTickets,
+    title: args.title,
     description: args.description,
+    image_url: args.imageUrl,
   });
 
   return new TransactionInstruction({
     programId: PROGRAM_ID,
     keys: [
-      { pubkey: args.creator, isSigner: true, isWritable: true },
-      { pubkey: args.bounty, isSigner: false, isWritable: true },
+      { pubkey: args.seller, isSigner: true, isWritable: true },
+      { pubkey: args.raffle, isSigner: false, isWritable: true },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     ],
     data,
   });
 }
 
-export function buildSubmitWorkInstruction(args: {
-  claimant: PublicKey;
-  bounty: PublicKey;
-  workUrl: string;
+export function buildBuyTicketsInstruction(args: {
+  buyer: PublicKey;
+  raffle: PublicKey;
+  buyerPosition: PublicKey;
+  quantity: number;
 }): TransactionInstruction {
-  const data = coder.instruction.encode("submit_work", {
-    work_url: args.workUrl,
+  const data = coder.instruction.encode("buy_tickets", {
+    quantity: args.quantity,
   });
 
   return new TransactionInstruction({
     programId: PROGRAM_ID,
     keys: [
-      { pubkey: args.claimant, isSigner: true, isWritable: false },
-      { pubkey: args.bounty, isSigner: false, isWritable: true },
+      { pubkey: args.buyer, isSigner: true, isWritable: true },
+      { pubkey: args.raffle, isSigner: false, isWritable: true },
+      { pubkey: args.buyerPosition, isSigner: false, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     ],
     data,
   });
 }
 
-export function buildApproveBountyInstruction(args: {
-  creator: PublicKey;
-  claimant: PublicKey;
-  bounty: PublicKey;
+export function buildCloseRaffleInstruction(args: {
+  seller: PublicKey;
+  raffle: PublicKey;
 }): TransactionInstruction {
-  const data = coder.instruction.encode("approve_bounty", {});
-
+  const data = coder.instruction.encode("close_raffle", {});
   return new TransactionInstruction({
     programId: PROGRAM_ID,
     keys: [
-      { pubkey: args.creator, isSigner: true, isWritable: true },
-      { pubkey: args.claimant, isSigner: false, isWritable: true },
-      { pubkey: args.bounty, isSigner: false, isWritable: true },
+      { pubkey: args.seller, isSigner: true, isWritable: true },
+      { pubkey: args.raffle, isSigner: false, isWritable: true },
     ],
     data,
   });
 }
 
-export function buildCancelBountyInstruction(args: {
-  creator: PublicKey;
-  bounty: PublicKey;
+export function buildClaimProceedsInstruction(args: {
+  seller: PublicKey;
+  raffle: PublicKey;
 }): TransactionInstruction {
-  const data = coder.instruction.encode("cancel_bounty", {});
-
+  const data = coder.instruction.encode("claim_proceeds", {});
   return new TransactionInstruction({
     programId: PROGRAM_ID,
     keys: [
-      { pubkey: args.creator, isSigner: true, isWritable: true },
-      { pubkey: args.bounty, isSigner: false, isWritable: true },
+      { pubkey: args.seller, isSigner: true, isWritable: true },
+      { pubkey: args.raffle, isSigner: false, isWritable: true },
     ],
     data,
   });
 }
 
-export async function buildSubmitWorkTransaction(args: {
-  user: PublicKey;
-  bounty: PublicKey;
-  workUrl: string;
+export async function buildBuyTicketsTransaction(args: {
+  buyer: PublicKey;
+  raffle: PublicKey;
+  quantity: number;
 }) {
+  const buyerPosition = getBuyerPositionPda(args.raffle, args.buyer);
   const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
 
   const tx = new Transaction({
-    feePayer: args.user,
+    feePayer: args.buyer,
     blockhash,
     lastValidBlockHeight,
   });
 
   tx.add(
-    buildSubmitWorkInstruction({
-      claimant: args.user,
-      bounty: args.bounty,
-      workUrl: args.workUrl,
+    buildBuyTicketsInstruction({
+      buyer: args.buyer,
+      raffle: args.raffle,
+      buyerPosition,
+      quantity: args.quantity,
     }),
   );
 

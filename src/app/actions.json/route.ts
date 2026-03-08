@@ -6,8 +6,8 @@ export async function GET() {
   const payload: ActionsJson = {
     rules: [
       {
-        pathPattern: "/bounty/*",
-        apiPath: "/api/actions/bounty/*",
+        pathPattern: "/raffle/*",
+        apiPath: "/api/actions/raffle/*",
       },
     ],
   };
