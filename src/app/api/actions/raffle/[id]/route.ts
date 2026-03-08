@@ -1,5 +1,6 @@
 import {
   ACTIONS_CORS_HEADERS,
+  createActionHeaders,
   createPostResponse,
   type ActionGetResponse,
   type ActionPostRequest,
@@ -19,7 +20,17 @@ interface RouteParams {
 }
 
 function jsonError(message: string, status = 400) {
-  return Response.json({ message }, { status, headers: ACTIONS_CORS_HEADERS });
+  return Response.json(
+    { message },
+    {
+      status,
+      headers: createActionHeaders({
+        headers: ACTIONS_CORS_HEADERS,
+        chainId: "devnet",
+        actionVersion: "2.1",
+      }),
+    },
+  );
 }
 
 export async function GET(_req: Request, { params }: RouteParams) {
@@ -65,7 +76,13 @@ export async function GET(_req: Request, { params }: RouteParams) {
     },
   };
 
-  return Response.json(payload, { headers: ACTIONS_CORS_HEADERS });
+  return Response.json(payload, {
+    headers: createActionHeaders({
+      headers: ACTIONS_CORS_HEADERS,
+      chainId: "devnet",
+      actionVersion: "2.1",
+    }),
+  });
 }
 
 export async function POST(req: Request, { params }: RouteParams) {
@@ -125,9 +142,21 @@ export async function POST(req: Request, { params }: RouteParams) {
     },
   });
 
-  return Response.json(payload, { headers: ACTIONS_CORS_HEADERS });
+  return Response.json(payload, {
+    headers: createActionHeaders({
+      headers: ACTIONS_CORS_HEADERS,
+      chainId: "devnet",
+      actionVersion: "2.1",
+    }),
+  });
 }
 
 export async function OPTIONS() {
-  return new Response(null, { headers: ACTIONS_CORS_HEADERS });
+  return new Response(null, {
+    headers: createActionHeaders({
+      headers: ACTIONS_CORS_HEADERS,
+      chainId: "devnet",
+      actionVersion: "2.1",
+    }),
+  });
 }

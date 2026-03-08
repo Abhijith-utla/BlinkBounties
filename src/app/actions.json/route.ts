@@ -1,4 +1,7 @@
-import { ACTIONS_CORS_HEADERS, type ActionsJson } from "@solana/actions";
+import {
+  createActionHeaders,
+  type ActionsJson,
+} from "@solana/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -13,12 +16,18 @@ export async function GET() {
   };
 
   return Response.json(payload, {
-    headers: ACTIONS_CORS_HEADERS,
+    headers: createActionHeaders({
+      chainId: "devnet",
+      actionVersion: "2.1",
+    }),
   });
 }
 
 export async function OPTIONS() {
   return new Response(null, {
-    headers: ACTIONS_CORS_HEADERS,
+    headers: createActionHeaders({
+      chainId: "devnet",
+      actionVersion: "2.1",
+    }),
   });
 }
