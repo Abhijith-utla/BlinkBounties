@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { BountyActions } from "@/components/bounty-actions";
+import { SubmitWorkCard } from "@/components/submit-work-card";
 import { APP_URL, fetchBountyByAddress } from "@/lib/solana";
 
 interface Props {
@@ -62,6 +63,7 @@ export default async function BountyPage({ params }: Props) {
         </div>
       </section>
 
+      <SubmitWorkCard bounty={bounty} />
       <BountyActions bounty={bounty} />
 
       <Link href="/" className="text-sm font-semibold underline">

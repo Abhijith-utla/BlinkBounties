@@ -82,29 +82,35 @@ export function BountyActions({ bounty }: Props) {
 
   return (
     <div className="space-y-4 rounded-2xl border border-black/10 bg-white p-5 shadow-lg">
-      <h3 className="text-lg font-semibold">Bounty Controls</h3>
+      <h3 className="text-lg font-semibold">Creator Review</h3>
 
       <p className="text-sm text-black/70">Share this Blink URL:</p>
       <code className="block overflow-x-auto rounded-lg bg-black px-3 py-2 text-xs text-emerald-300">{blinkUrl}</code>
 
-      <div className="flex flex-wrap gap-3">
-        <button
-          type="button"
-          disabled={!isCreator || bounty.status !== "submitted" || busy}
-          onClick={() => sendCreatorTransaction("approve")}
-          className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          Approve + Release Funds
-        </button>
-        <button
-          type="button"
-          disabled={!isCreator || bounty.status !== "open" || busy}
-          onClick={() => sendCreatorTransaction("cancel")}
-          className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          Cancel + Refund
-        </button>
-      </div>
+      {isCreator ? (
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            disabled={bounty.status !== "submitted" || busy}
+            onClick={() => sendCreatorTransaction("approve")}
+            className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Approve + Release Funds
+          </button>
+          <button
+            type="button"
+            disabled={bounty.status !== "open" || busy}
+            onClick={() => sendCreatorTransaction("cancel")}
+            className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Cancel + Refund
+          </button>
+        </div>
+      ) : (
+        <p className="text-sm text-black/65">
+          Waiting for creator decision after submission.
+        </p>
+      )}
 
       {statusText ? <p className="text-xs text-emerald-700">{statusText}</p> : null}
       {error ? <p className="text-xs text-red-700">{error}</p> : null}
