@@ -57,6 +57,9 @@ interface DecodedBuyerPosition {
   bump: number;
 }
 
+const RAFFLE_DISCRIMINATOR = Buffer.from([143, 133, 63, 173, 138, 10, 142, 200]);
+const BUYER_POSITION_DISCRIMINATOR = Buffer.from([232, 163, 167, 95, 170, 210, 214, 83]);
+
 export interface RaffleAccount {
   address: string;
   seller: string;
@@ -120,6 +123,11 @@ function parseBuyerPosition(address: PublicKey, data: Buffer): BuyerPositionAcco
   };
 }
 
+function hasDiscriminator(data: Buffer, discriminator: Buffer): boolean {
+  if (data.length < 8) return false;
+  return data.subarray(0, 8).equals(discriminator);
+}
+
 export function getRafflePda(seller: PublicKey, raffleId: bigint): PublicKey {
   const raffleIdBuffer = new BN(raffleId.toString()).toArrayLike(Buffer, "le", 8);
   const [pda] = PublicKey.findProgramAddressSync(
@@ -147,7 +155,15 @@ export async function fetchAllRaffles(rpcConnection: Connection): Promise<Raffle
   const accounts = await rpcConnection.getProgramAccounts(PROGRAM_ID, {
     filters: [{ memcmp: { offset: 0, bytes: "R1L4cMRuGB9" } }],
   });
-  const list = accounts.map((account) => parseRaffle(account.pubkey, account.account.data));
+  const list = accounts
+    .filter((account) => hasDiscriminator(account.account.data, RAFFLE_DISCRIMINATOR))
+    .flatMap((account) => {
+      try {
+        return [parseRaffle(account.pubkey, account.account.data)];
+      } catch {
+        return [];
+      }
+    });
   return list.sort((a, b) => Number(b.raffleId) - Number(a.raffleId));
 }
 
@@ -161,7 +177,15 @@ export async function fetchRafflesBySeller(
       { memcmp: { offset: 8, bytes: seller.toBase58() } },
     ],
   });
-  const list = accounts.map((account) => parseRaffle(account.pubkey, account.account.data));
+  const list = accounts
+    .filter((account) => hasDiscriminator(account.account.data, RAFFLE_DISCRIMINATOR))
+    .flatMap((account) => {
+      try {
+        return [parseRaffle(account.pubkey, account.account.data)];
+      } catch {
+        return [];
+      }
+    });
   return list.sort((a, b) => Number(b.raffleId) - Number(a.raffleId));
 }
 
@@ -175,7 +199,15 @@ export async function fetchPositionsByBuyer(
       { memcmp: { offset: 8 + 32, bytes: buyer.toBase58() } },
     ],
   });
-  return accounts.map((account) => parseBuyerPosition(account.pubkey, account.account.data));
+  return accounts
+    .filter((account) => hasDiscriminator(account.account.data, BUYER_POSITION_DISCRIMINATOR))
+    .flatMap((account) => {
+      try {
+        return [parseBuyerPosition(account.pubkey, account.account.data)];
+      } catch {
+        return [];
+      }
+    });
 }
 
 export async function fetchPositionsByRaffle(
@@ -188,7 +220,15 @@ export async function fetchPositionsByRaffle(
       { memcmp: { offset: 8, bytes: raffle.toBase58() } },
     ],
   });
-  return accounts.map((account) => parseBuyerPosition(account.pubkey, account.account.data));
+  return accounts
+    .filter((account) => hasDiscriminator(account.account.data, BUYER_POSITION_DISCRIMINATOR))
+    .flatMap((account) => {
+      try {
+        return [parseBuyerPosition(account.pubkey, account.account.data)];
+      } catch {
+        return [];
+      }
+    });
 }
 
 export function buildCreateRaffleInstruction(args: {
