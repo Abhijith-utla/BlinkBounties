@@ -149,6 +149,12 @@ export function MarketplaceHub() {
       if (!title.trim() || !description.trim()) throw new Error("Title and description are required.");
       if (!Number.isFinite(priceSol) || priceSol <= 0) throw new Error("Invalid ticket price.");
       if (!Number.isFinite(max) || max <= 0) throw new Error("Invalid max tickets.");
+      if (!/^https?:\/\//i.test(imageUrl.trim())) {
+        throw new Error("Image URL must be a public http(s) link. Do not paste base64 data URLs.");
+      }
+      if (imageUrl.trim().length > 300) {
+        throw new Error("Image URL is too long. Use a shorter hosted image link.");
+      }
 
       const raffleId = BigInt(Date.now());
       const rafflePda = getRafflePda(wallet.publicKey, raffleId);
@@ -170,6 +176,14 @@ export function MarketplaceHub() {
           imageUrl: imageUrl.trim(),
         }),
       );
+
+      const simulation = await connection.simulateTransaction(tx, undefined, true);
+      if (simulation.value.err) {
+        const simulationDetails = simulation.value.logs?.slice(-6).join(" | ");
+        throw new Error(
+          `Preflight failed: ${JSON.stringify(simulation.value.err)}${simulationDetails ? ` (${simulationDetails})` : ""}`,
+        );
+      }
 
       const signature = await wallet.sendTransaction(tx, connection, {
         preflightCommitment: "confirmed",
