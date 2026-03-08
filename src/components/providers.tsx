@@ -26,7 +26,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <AuthProvider>
       <ConnectionProvider endpoint={SOLANA_RPC_URL}>
-        <WalletProvider wallets={wallets} autoConnect>
+        <WalletProvider wallets={wallets} autoConnect={false}>
           <WalletModalProvider>{children}</WalletModalProvider>
         </WalletProvider>
       </ConnectionProvider>

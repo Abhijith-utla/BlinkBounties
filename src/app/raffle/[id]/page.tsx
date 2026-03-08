@@ -10,7 +10,7 @@ interface Props {
 }
 
 const statusClassName: Record<string, string> = {
-  open: "bg-sky-100 text-sky-800",
+  open: "bg-[color:var(--olive-100)] text-[color:var(--olive-700)]",
   closed: "bg-zinc-200 text-zinc-700",
 };
 
@@ -33,8 +33,8 @@ export default async function RafflePage({ params }: Props) {
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-6 py-10">
-      <section className="rounded-2xl border border-black/10 bg-white/85 p-6 shadow-xl">
-        <p className="text-xs uppercase tracking-[0.2em] text-black/50">Raffle Listing</p>
+      <section className="rounded-2xl border border-[color:var(--surface-border)] bg-white p-6 shadow-sm">
+        <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--ink-secondary)]">Raffle Listing</p>
         <div className="mt-3 grid gap-4 md:grid-cols-[1fr_1.2fr]">
           <img
             src={raffle.imageUrl || "/next.svg"}
@@ -42,23 +42,23 @@ export default async function RafflePage({ params }: Props) {
             className="h-64 w-full rounded-xl object-cover"
           />
           <div>
-            <h1 className="text-3xl font-bold">{raffle.title}</h1>
-            <p className="mt-2 text-black/75">{raffle.description}</p>
+            <h1 className="text-3xl font-bold text-[color:var(--ink)]">{raffle.title}</h1>
+            <p className="mt-2 text-[color:var(--ink-secondary)]">{raffle.description}</p>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
               <span className={`rounded-full px-3 py-1 font-semibold ${statusClassName[raffle.status]}`}>
                 {raffle.status.toUpperCase()}
               </span>
-              <span className="rounded-full bg-black/5 px-3 py-1">
+              <span className="rounded-full bg-[color:var(--olive-50)] px-3 py-1 text-[color:var(--ink-secondary)]">
                 {raffle.ticketPriceSol.toFixed(4)} SOL / ticket
               </span>
-              <span className="rounded-full bg-black/5 px-3 py-1">
+              <span className="rounded-full bg-[color:var(--olive-50)] px-3 py-1 text-[color:var(--ink-secondary)]">
                 Sold {raffle.soldTickets}/{raffle.maxTickets}
               </span>
-              <span className="rounded-full bg-black/5 px-3 py-1">Seller: {raffle.seller}</span>
+              <span className="rounded-full bg-[color:var(--olive-50)] px-3 py-1 text-[color:var(--ink-secondary)]">Seller: {raffle.seller}</span>
             </div>
 
-            <div className="mt-4 rounded-xl border border-black/10 bg-black/95 p-4 text-xs text-white">
-              <p className="font-semibold text-emerald-300">Action Endpoint</p>
+            <div className="mt-4 rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--ink)] p-4 text-xs text-white">
+              <p className="font-semibold text-[color:var(--olive-100)]">Action Endpoint</p>
               <code className="mt-2 block overflow-x-auto">{`${APP_URL}/api/actions/raffle/${raffle.address}`}</code>
             </div>
           </div>
@@ -67,7 +67,7 @@ export default async function RafflePage({ params }: Props) {
 
       <RaffleDetailClient raffle={raffle} buyers={buyers} />
 
-      <Link href="/" className="text-sm font-semibold underline">
+      <Link href="/" className="text-sm font-semibold text-[color:var(--olive-700)] underline">
         Back to marketplace
       </Link>
     </main>

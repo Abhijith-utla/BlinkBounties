@@ -26,7 +26,7 @@ export function WinnerModal({ nftTitle, nftImage, onClose }: WinnerModalProps) {
     >
       <div className="relative w-full max-w-sm rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-2xl">
         {/* Top banner */}
-        <div className="bg-gradient-to-r from-violet-600 to-violet-500 px-6 py-4 text-center">
+        <div className="bg-gradient-to-r from-[color:var(--olive-700)] to-[color:var(--olive-500)] px-6 py-4 text-center">
           <p className="text-2xl">🏆</p>
           <h2 className="mt-1 text-lg font-bold text-white">Winner Announced!</h2>
         </div>
@@ -51,9 +51,9 @@ export function WinnerModal({ nftTitle, nftImage, onClose }: WinnerModalProps) {
           <p className="text-base font-bold text-gray-900">{nftTitle}</p>
 
           <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-4">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-green-600">New Owner</p>
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-[color:var(--olive-700)]">New Owner</p>
             <div className="flex items-center gap-2">
-              <div className="h-8 w-8 shrink-0 rounded-full bg-gradient-to-br from-violet-500 to-green-400" />
+              <div className="h-8 w-8 shrink-0 rounded-full bg-gradient-to-br from-[color:var(--olive-700)] to-[color:var(--olive-400)]" />
               <p className="font-mono text-sm font-semibold text-gray-900">{short}</p>
             </div>
             <p className="mt-2 text-xs text-gray-500">
@@ -63,7 +63,7 @@ export function WinnerModal({ nftTitle, nftImage, onClose }: WinnerModalProps) {
 
           <button
             onClick={onClose}
-            className="mt-4 w-full rounded-xl bg-gray-900 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-gray-700"
+            className="mt-4 w-full rounded-xl bg-[color:var(--olive-700)] py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[color:var(--olive-500)]"
           >
             Close
           </button>

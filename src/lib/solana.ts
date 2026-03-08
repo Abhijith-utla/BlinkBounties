@@ -60,6 +60,28 @@ interface DecodedBuyerPosition {
 const RAFFLE_DISCRIMINATOR = Buffer.from([143, 133, 63, 173, 138, 10, 142, 200]);
 const BUYER_POSITION_DISCRIMINATOR = Buffer.from([232, 163, 167, 95, 170, 210, 214, 83]);
 
+function isRateLimitError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  return message.includes("429") || message.includes("too many requests") || message.includes("rate limit");
+}
+
+async function withRpcRetry<T>(fn: () => Promise<T>, maxRetries = 2): Promise<T> {
+  let attempt = 0;
+  while (true) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (!isRateLimitError(error) || attempt >= maxRetries) {
+        throw error;
+      }
+      const delayMs = 400 * (attempt + 1);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      attempt += 1;
+    }
+  }
+}
+
 export interface RaffleAccount {
   address: string;
   seller: string;
@@ -146,15 +168,17 @@ export function getBuyerPositionPda(raffle: PublicKey, buyer: PublicKey): Public
 }
 
 export async function fetchRaffleByAddress(address: PublicKey): Promise<RaffleAccount | null> {
-  const info = await connection.getAccountInfo(address);
+  const info = await withRpcRetry(() => connection.getAccountInfo(address));
   if (!info) return null;
   return parseRaffle(address, info.data);
 }
 
 export async function fetchAllRaffles(rpcConnection: Connection): Promise<RaffleAccount[]> {
-  const accounts = await rpcConnection.getProgramAccounts(PROGRAM_ID, {
-    filters: [{ memcmp: { offset: 0, bytes: "R1L4cMRuGB9" } }],
-  });
+  const accounts = await withRpcRetry(() =>
+    rpcConnection.getProgramAccounts(PROGRAM_ID, {
+      filters: [{ memcmp: { offset: 0, bytes: "R1L4cMRuGB9" } }],
+    }),
+  );
   const list = accounts
     .filter((account) => hasDiscriminator(account.account.data, RAFFLE_DISCRIMINATOR))
     .flatMap((account) => {
@@ -171,12 +195,14 @@ export async function fetchRafflesBySeller(
   rpcConnection: Connection,
   seller: PublicKey,
 ): Promise<RaffleAccount[]> {
-  const accounts = await rpcConnection.getProgramAccounts(PROGRAM_ID, {
-    filters: [
-      { memcmp: { offset: 0, bytes: "R1L4cMRuGB9" } },
-      { memcmp: { offset: 8, bytes: seller.toBase58() } },
-    ],
-  });
+  const accounts = await withRpcRetry(() =>
+    rpcConnection.getProgramAccounts(PROGRAM_ID, {
+      filters: [
+        { memcmp: { offset: 0, bytes: "R1L4cMRuGB9" } },
+        { memcmp: { offset: 8, bytes: seller.toBase58() } },
+      ],
+    }),
+  );
   const list = accounts
     .filter((account) => hasDiscriminator(account.account.data, RAFFLE_DISCRIMINATOR))
     .flatMap((account) => {
@@ -193,12 +219,14 @@ export async function fetchPositionsByBuyer(
   rpcConnection: Connection,
   buyer: PublicKey,
 ): Promise<BuyerPositionAccount[]> {
-  const accounts = await rpcConnection.getProgramAccounts(PROGRAM_ID, {
-    filters: [
-      { memcmp: { offset: 0, bytes: "futkuHCnA98" } },
-      { memcmp: { offset: 8 + 32, bytes: buyer.toBase58() } },
-    ],
-  });
+  const accounts = await withRpcRetry(() =>
+    rpcConnection.getProgramAccounts(PROGRAM_ID, {
+      filters: [
+        { memcmp: { offset: 0, bytes: "futkuHCnA98" } },
+        { memcmp: { offset: 8 + 32, bytes: buyer.toBase58() } },
+      ],
+    }),
+  );
   return accounts
     .filter((account) => hasDiscriminator(account.account.data, BUYER_POSITION_DISCRIMINATOR))
     .flatMap((account) => {
@@ -214,12 +242,14 @@ export async function fetchPositionsByRaffle(
   rpcConnection: Connection,
   raffle: PublicKey,
 ): Promise<BuyerPositionAccount[]> {
-  const accounts = await rpcConnection.getProgramAccounts(PROGRAM_ID, {
-    filters: [
-      { memcmp: { offset: 0, bytes: "futkuHCnA98" } },
-      { memcmp: { offset: 8, bytes: raffle.toBase58() } },
-    ],
-  });
+  const accounts = await withRpcRetry(() =>
+    rpcConnection.getProgramAccounts(PROGRAM_ID, {
+      filters: [
+        { memcmp: { offset: 0, bytes: "futkuHCnA98" } },
+        { memcmp: { offset: 8, bytes: raffle.toBase58() } },
+      ],
+    }),
+  );
   return accounts
     .filter((account) => hasDiscriminator(account.account.data, BUYER_POSITION_DISCRIMINATOR))
     .flatMap((account) => {
