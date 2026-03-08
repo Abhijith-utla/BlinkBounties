@@ -5,6 +5,7 @@ import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { PublicKey, Transaction } from "@solana/web3.js";
 import { useMemo, useState } from "react";
 
+import { WinnerModal } from "@/components/winner-modal";
 import {
   APP_URL,
   buildBuyTicketsInstruction,
@@ -27,6 +28,7 @@ export function RaffleDetailClient({ raffle, buyers }: Props) {
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showWinner, setShowWinner] = useState(false);
 
   const isSeller = useMemo(
     () => !!wallet.publicKey && wallet.publicKey.toBase58() === raffle.seller,
@@ -73,7 +75,11 @@ export function RaffleDetailClient({ raffle, buyers }: Props) {
       const sig = await wallet.sendTransaction(tx, connection, { preflightCommitment: "confirmed" });
       await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
       setStatus(`Transaction success: ${sig}`);
-      setTimeout(() => window.location.reload(), 1200);
+      if (mode === "claim") {
+        setShowWinner(true);
+      } else {
+        setTimeout(() => window.location.reload(), 1200);
+      }
     } catch (txError) {
       setError(txError instanceof Error ? txError.message : "Transaction failed.");
     } finally {
@@ -161,6 +167,14 @@ export function RaffleDetailClient({ raffle, buyers }: Props) {
 
       {status ? <p className="text-xs text-emerald-700">{status}</p> : null}
       {error ? <p className="text-xs text-red-700">{error}</p> : null}
+
+      {showWinner && (
+        <WinnerModal
+          nftTitle={raffle.title}
+          nftImage={raffle.imageUrl}
+          onClose={() => { setShowWinner(false); window.location.reload(); }}
+        />
+      )}
     </div>
   );
 }

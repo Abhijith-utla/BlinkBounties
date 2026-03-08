@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, IBM_Plex_Mono } from "next/font/google";
+import { Space_Grotesk, IBM_Plex_Mono, Playfair_Display } from "next/font/google";
 
 import { AppProviders } from "@/components/providers";
 
@@ -16,6 +16,12 @@ const plexMono = IBM_Plex_Mono({
   weight: ["400", "500", "700"],
 });
 
+const playfairDisplay = Playfair_Display({
+  variable: "--font-playfair-display",
+  subsets: ["latin"],
+  weight: ["400", "700"],
+});
+
 export const metadata: Metadata = {
   title: "Blink Bounties",
   description: "Trustless escrow bounties powered by Solana Actions",
@@ -28,7 +34,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${spaceGrotesk.variable} ${plexMono.variable} antialiased`}>
+      <body className={`${spaceGrotesk.variable} ${plexMono.variable} ${playfairDisplay.variable} antialiased`}>
         <AppProviders>{children}</AppProviders>
       </body>
     </html>

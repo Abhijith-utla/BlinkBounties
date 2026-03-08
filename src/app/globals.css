@@ -3,9 +3,10 @@
 :root {
   --font-sans: var(--font-space-grotesk);
   --font-mono: var(--font-plex-mono);
-  --bg-a: #fff5e7;
-  --bg-b: #dff7ff;
-  --ink: #101011;
+  --font-display: var(--font-playfair-display);
+  --bg-primary: #f4f5f7;
+  --ink: #0f172a;
+  --ink-secondary: #64748b;
 }
 
 * {
@@ -21,10 +22,7 @@ body {
 
 body {
   color: var(--ink);
-  background:
-    radial-gradient(circle at 15% 15%, #ffe0a8 0, transparent 40%),
-    radial-gradient(circle at 85% 25%, #a4dfff 0, transparent 38%),
-    linear-gradient(120deg, var(--bg-a), var(--bg-b));
+  background: var(--bg-primary);
   font-family: var(--font-sans), sans-serif;
 }
 

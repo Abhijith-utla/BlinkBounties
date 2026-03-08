@@ -10,6 +10,7 @@ import {
 import { useMemo, type ReactNode } from "react";
 
 import { SOLANA_RPC_URL } from "@/lib/solana";
+import { AuthProvider } from "@/lib/auth-context";
 
 import "@solana/wallet-adapter-react-ui/styles.css";
 
@@ -23,10 +24,12 @@ export function AppProviders({ children }: { children: ReactNode }) {
   );
 
   return (
-    <ConnectionProvider endpoint={SOLANA_RPC_URL}>
-      <WalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider>{children}</WalletModalProvider>
-      </WalletProvider>
-    </ConnectionProvider>
+    <AuthProvider>
+      <ConnectionProvider endpoint={SOLANA_RPC_URL}>
+        <WalletProvider wallets={wallets} autoConnect>
+          <WalletModalProvider>{children}</WalletModalProvider>
+        </WalletProvider>
+      </ConnectionProvider>
+    </AuthProvider>
   );
 }
