@@ -1,0 +1,19 @@
+[toolchain]
+anchor_version = "0.32.1"
+
+[features]
+seeds = false
+skip-lint = false
+
+[programs.devnet]
+blink_bounties = "3MAR3HqMntaDfPE1Vmf1XGBeCEv2dykXUCjwsMB8gF1S"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "Localnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "echo \"Add Anchor tests under tests/ then run with anchor test\""
